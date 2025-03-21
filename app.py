@@ -39,6 +39,8 @@ with st.spinner("🔄 Fetching latest news and analyzing sentiment & emotions...
     df = get_sentiment_data()
     df = classify_emotions(df)
 
+st.info(f"Data provided by: {st.session_state.get('news_provider', 'Unknown')}")
+
 # Display articles
 st.subheader("📰 Latest News")
 st.dataframe(df[['publishedAt', 'title', 'sentiment', 'emotion', 'sentiment_label']], use_container_width=True)
