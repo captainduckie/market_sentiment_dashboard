@@ -38,14 +38,18 @@ def fetch_news():
     response = requests.get(url)
     data = response.json()
     articles = data.get('articles', [])
+
     print("NewsAPI articles fetched:", len(articles))
-    print("First article:", articles[0] if articles else "No articles")
+
+    if not articles:
+        return pd.DataFrame(columns=['source', 'title', 'description', 'publishedAt', 'url'])
+
     df = pd.DataFrame([{
-        'source': a['source']['name'],
-        'title': a['title'],
-        'description': a.get('description') or "",  # Fallback to empty string
-        'publishedAt': a['publishedAt'],
-        'url': a['url']
+        'source': a['source']['name'] if a.get('source') else "Unknown",
+        'title': a.get('title') or "",
+        'description': a.get('description') or "",
+        'publishedAt': a.get('publishedAt') or datetime.now().isoformat(),
+        'url': a.get('url') or ""
     } for a in articles])
     return df
 
@@ -85,6 +89,12 @@ def classify_emotions(df):
 
 def get_sentiment_data():
     df = fetch_news()
+    if df.empty:
+        print("⚠️ No news data returned. Check API key or query.")
+        return pd.DataFrame(columns=[
+            'source', 'title', 'description', 'publishedAt', 'url',
+            'sentiment', 'sentiment_label', 'emotion', 'country', 'retrieved_at'
+        ])
     df = analyze_sentiment(df)
     df = add_country_column(df)
     df['retrieved_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
