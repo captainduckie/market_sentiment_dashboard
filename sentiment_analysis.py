@@ -1,5 +1,3 @@
-# sentiment_analysis.py
-
 import os
 import requests
 import pandas as pd
@@ -22,7 +20,7 @@ analyzer = SentimentIntensityAnalyzer()
 nlp = spacy.load("en_core_web_sm")
 emotion_classifier = pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base", top_k=1)
 
-# News source mapping
+# Source -> Country map
 source_country_map = {
     'BBC News': 'United Kingdom',
     'CNN': 'United States',
@@ -162,20 +160,6 @@ def analyze_sentiment(df):
     df['sentiment_label'] = df['sentiment'].apply(label)
     return df
 
-def add_country_column(df):
-    df['country'] = df['source'].map(source_country_map).fillna('Unknown')
-    return df
-
-def extract_named_entities(df):
-    all_entities = []
-    for text in df['title'].dropna():
-        doc = nlp(text)
-        for ent in doc.ents:
-            if ent.label_ in ["ORG", "GPE", "PERSON"]:
-                all_entities.append(ent.text)
-    entity_freq = pd.Series(all_entities).value_counts().head(30)
-    return entity_freq
-
 def extract_emotion_label(text):
     try:
         result = emotion_classifier(text)
@@ -192,6 +176,24 @@ def classify_emotions(df):
     df['emotion'] = df['description'].fillna("").apply(lambda text: extract_emotion_label(text))
     return df
 
+def add_country_column(df):
+    df['country'] = df['source'].map(source_country_map).fillna('Unknown')
+    return df
+
+def extract_named_entities(df):
+    all_entities = []
+    for text in df['title'].dropna():
+        doc = nlp(text)
+        for ent in doc.ents:
+            if ent.label_ in ["ORG", "GPE", "PERSON"]:
+                all_entities.append(ent.text)
+    entity_freq = pd.Series(all_entities).value_counts().head(30)
+    return entity_freq
+
+def format_titles_with_links(df):
+    df['title'] = df.apply(lambda row: f"[{row['title']}]({row['url']})" if row['url'] else row['title'], axis=1)
+    return df
+
 def get_sentiment_data():
     df = fetch_news()
     provider = st.session_state.get("news_provider", "Unknown")
@@ -204,6 +206,8 @@ def get_sentiment_data():
             'sentiment', 'sentiment_label', 'emotion', 'country', 'retrieved_at'
         ])
     df = analyze_sentiment(df)
+    df = classify_emotions(df)
     df = add_country_column(df)
+    df = format_titles_with_links(df)
     df['retrieved_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     return df
