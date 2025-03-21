@@ -1,25 +1,45 @@
-# news_sentiment.py
+# sentiment_analysis.py
+
 import os
-from dotenv import load_dotenv
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+import spacy
+from transformers import pipeline
+from dotenv import load_dotenv
 
+# Load env vars locally
 load_dotenv()
+API_KEY = os.getenv("NEWS_API_KEY")
 
-API_KEY = '9ac5787362204ca0b18fe27cfd86de0e'
-SEARCH_TERM = 'tech stocks'
-FROM_DATE = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+# Load models
+analyzer = SentimentIntensityAnalyzer()
+nlp = spacy.load("en_core_web_sm")
+emotion_classifier = pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base", top_k=1)
+
+# News source mapping
+source_country_map = {
+    'BBC News': 'United Kingdom',
+    'CNN': 'United States',
+    'The Wall Street Journal': 'United States',
+    'Al Jazeera English': 'Qatar',
+    'Reuters': 'United Kingdom',
+    'CNBC': 'United States',
+    'The Guardian': 'United Kingdom',
+    'Bloomberg': 'United States',
+    'Fox News': 'United States',
+    'Financial Times': 'United Kingdom',
+}
 
 def fetch_news():
-    url = ('https://newsapi.org/v2/everything?q={}&from={}&sortBy=publishedAt&apiKey={}'
-          .format(SEARCH_TERM, FROM_DATE, API_KEY))
+    from_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    url = f'https://newsapi.org/v2/everything?q=market&from={from_date}&sortBy=publishedAt&apiKey={API_KEY}'
     response = requests.get(url)
     data = response.json()
     articles = data.get('articles', [])
-    
     df = pd.DataFrame([{
+        'source': a['source']['name'],
         'title': a['title'],
         'description': a['description'],
         'publishedAt': a['publishedAt'],
@@ -28,17 +48,42 @@ def fetch_news():
     return df
 
 def analyze_sentiment(df):
-    analyzer = SentimentIntensityAnalyzer()
     df['sentiment'] = df['description'].apply(lambda text: analyzer.polarity_scores(str(text))['compound'])
-    df['publishedAt'] = pd.to_datetime(df['publishedAt'])
+    def label(score):
+        if score >= 0.6:
+            return "🟢 Very Positive"
+        elif score >= 0.2:
+            return "🟢 Positive"
+        elif score <= -0.6:
+            return "🔴 Very Negative"
+        elif score <= -0.2:
+            return "🔴 Negative"
+        else:
+            return "🟡 Neutral"
+    df['sentiment_label'] = df['sentiment'].apply(label)
+    return df
+
+def add_country_column(df):
+    df['country'] = df['source'].map(source_country_map).fillna('Unknown')
+    return df
+
+def extract_named_entities(df):
+    all_entities = []
+    for text in df['title'].dropna():
+        doc = nlp(text)
+        for ent in doc.ents:
+            if ent.label_ in ["ORG", "GPE", "PERSON"]:
+                all_entities.append(ent.text)
+    entity_freq = pd.Series(all_entities).value_counts().head(30)
+    return entity_freq
+
+def classify_emotions(df):
+    df['emotion'] = df['description'].fillna("").apply(lambda text: emotion_classifier(text)[0]["label"] if text else "Unknown")
     return df
 
 def get_sentiment_data():
     df = fetch_news()
     df = analyze_sentiment(df)
-
-    if os.getenv("STREAMLIT_CLOUD") != "1":
-        os.makedirs("data", exist_ok=True)
-        df.to_csv("data/news_sentiment.csv", index=False)
-
+    df = add_country_column(df)
+    df['retrieved_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     return df
