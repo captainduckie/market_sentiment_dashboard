@@ -37,7 +37,7 @@ source_country_map = {
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_news():
-    for source_func in [fetch_from_newsapi, fetch_from_gnews, fetch_from_newsdata, fetch_from_contextualweb, fetch_from_mediastack]:
+    for source_func in [fetch_from_newsapi, fetch_from_gnews, fetch_from_newsdata]:
         df, provider = source_func()
         if not df.empty:
             st.session_state["news_provider"] = provider
