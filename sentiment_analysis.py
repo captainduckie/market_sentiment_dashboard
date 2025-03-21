@@ -38,17 +38,19 @@ def fetch_news():
     response = requests.get(url)
     data = response.json()
     articles = data.get('articles', [])
+    print("NewsAPI articles fetched:", len(articles))
+    print("First article:", articles[0] if articles else "No articles")
     df = pd.DataFrame([{
         'source': a['source']['name'],
         'title': a['title'],
-        'description': a['description'],
+        'description': a.get('description') or "",  # Fallback to empty string
         'publishedAt': a['publishedAt'],
         'url': a['url']
     } for a in articles])
     return df
 
 def analyze_sentiment(df):
-    df['sentiment'] = df['description'].apply(lambda text: analyzer.polarity_scores(str(text))['compound'])
+    df['sentiment'] = df['description'].fillna("").apply(lambda text: analyzer.polarity_scores(str(text))['compound'])
     def label(score):
         if score >= 0.6:
             return "🟢 Very Positive"
