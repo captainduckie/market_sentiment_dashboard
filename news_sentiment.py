@@ -1,8 +1,12 @@
 # news_sentiment.py
+import os
+from dotenv import load_dotenv
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+load_dotenv()
 
 API_KEY = '9ac5787362204ca0b18fe27cfd86de0e'
 SEARCH_TERM = 'tech stocks'
@@ -32,5 +36,9 @@ def analyze_sentiment(df):
 def get_sentiment_data():
     df = fetch_news()
     df = analyze_sentiment(df)
-    df.to_csv("data/news_sentiment.csv", index=False)
+
+    if os.getenv("STREAMLIT_CLOUD") != "1":
+        os.makedirs("data", exist_ok=True)
+        df.to_csv("data/news_sentiment.csv", index=False)
+
     return df
